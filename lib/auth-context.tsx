@@ -12,6 +12,7 @@ import {
 import { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { useRouter } from "next/navigation";
+import { initConsoleBranding } from "./console-branding";
 
 interface Profile {
   id: string;
@@ -42,6 +43,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+
+  // Initialize Console Branding
+  useEffect(() => {
+    initConsoleBranding();
+  }, []);
 
   const fetchProfile = useCallback(async (uid: string) => {
     const timeoutPromise = new Promise((_, reject) =>
