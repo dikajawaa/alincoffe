@@ -69,53 +69,40 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   useEffect(() => {
     let mounted = true;
 
-    // 1. Initial Session Check (Critical for first load)
-    const initSession = async () => {
-      // Safety timeout: Jangan biarkan loading lebih dari 5 detik
-      const safetyTimeout = setTimeout(() => {
-        if (mounted) {
-          console.warn("Auth initialization timed out, forcing loading false");
-          setLoading(false);
-        }
-      }, 5000);
-
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (mounted && session?.user) {
-          setUser(session.user);
-          await fetchProfile(session.user.id);
-        }
-      } catch (error) {
-        console.error("Session check error:", error);
-      } finally {
-        clearTimeout(safetyTimeout);
-        if (mounted) setLoading(false);
-      }
-    };
-
-    initSession();
-
-    // 2. Realtime Auth Listener
+    // Single source of truth for auth state
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Only react to changes, avoid conflict with initial check if possible
-      if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "USER_UPDATED"
-      ) {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        }
-        setLoading(false);
-      } else if (event === "SIGNED_OUT") {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
+      if (!mounted) return;
+
+      console.log(`[Auth] Event: ${event}`);
+
+      switch (event) {
+        case "INITIAL_SESSION":
+        case "SIGNED_IN":
+        case "TOKEN_REFRESHED":
+        case "USER_UPDATED":
+          if (session?.user) {
+            setUser(session.user);
+            await fetchProfile(session.user.id);
+          } else {
+            setUser(null);
+            setProfile(null);
+          }
+          setLoading(false);
+          break;
+
+        case "SIGNED_OUT":
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          break;
+
+        default:
+          // Untuk event lain, pastikan loading tetap berhenti jika memang inisialisasi awal
+          if (event !== "MFA_CHALLENGE") {
+            setLoading(false);
+          }
       }
     });
 
@@ -165,28 +152,23 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     return error;
   };
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw handleAuthError(error);
+  const signIn = useCallback(async (email: string, password: string) => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw handleAuthError(error);
 
-        if (data.session?.user) {
-          setUser(data.session.user);
-          await fetchProfile(data.session.user.id);
-        }
-      } catch (error) {
-        throw handleAuthError(error);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fetchProfile],
-  );
+      // ✅ State akan di-update otomatis oleh onAuthStateChange
+      // Tidak perlu manual setUser di sini
+    } catch (error) {
+      throw handleAuthError(error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const signInWithProvider = useCallback(
     async (provider: "google" | "apple") => {
@@ -241,6 +223,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signOut = useCallback(async () => {
     try {
       await supabase.auth.signOut();
+      // ✅ State akan di-update otomatis oleh onAuthStateChange event SIGNED_OUT
     } catch (error) {
       console.error("Sign out error:", error);
     }
