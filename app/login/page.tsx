@@ -41,6 +41,8 @@ export default function LoginPage() {
       if (view === "login") {
         await signIn(email, password);
         toast.success("Selamat datang kembali!");
+        // Small delay to ensure state propagates
+        await new Promise((resolve) => setTimeout(resolve, 300));
         router.push("/");
       } else if (view === "register") {
         await signUp(email, password, fullName);
