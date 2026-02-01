@@ -27,7 +27,7 @@ export const initConsoleBranding = () => {
   console.log("\n");
 
   console.log(
-    "% www.alinco.my.id",
+    "%c© 2022 Alinco | www.alinco.my.id",
     "color: #9ca3af; font-size: 11px;"
   );
 };
