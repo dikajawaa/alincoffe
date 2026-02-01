@@ -43,6 +43,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
+  // Debug state changes
   useEffect(() => {
     console.log("🔄 [Auth State Changed]");
     console.log("  - user:", user?.id || "null");
@@ -53,12 +54,24 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const fetchProfile = useCallback(async (uid: string) => {
     console.log("📥 [Fetching Profile] uid:", uid);
+
+    // Timeout wrapper untuk prevent hang
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Profile fetch timeout")), 5000),
+    );
+
     try {
-      const { data, error } = await supabase
+      const fetchPromise = supabase
         .from("profiles")
         .select("*")
         .eq("id", uid)
         .single();
+
+      // Race antara fetch dan timeout
+      const { data, error } = (await Promise.race([
+        fetchPromise,
+        timeoutPromise,
+      ])) as any;
 
       console.log("📊 [Fetch Profile] Result:", {
         hasData: !!data,
@@ -68,9 +81,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
       if (error) {
         if (error.code === "PGRST116") {
-          console.log(
-            "⚠️ [Profile] No profile found (this is OK for new users)",
-          );
+          console.log("⚠️ [Profile] No profile found (OK for new users)");
         } else {
           console.error("❌ [Profile] Error:", error);
         }
@@ -92,10 +103,24 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   useEffect(() => {
     console.log("🚀 [Auth Context] useEffect started");
+
+    // ✅ Cleanup listener lama yang mungkin masih aktif
+    console.log("🧹 [Auth] Removing old auth listeners...");
+    const channels = supabase.getChannels();
+    channels.forEach((channel) => {
+      if (channel.topic.includes("auth")) {
+        console.log("🗑️ Removing old channel:", channel.topic);
+        supabase.removeChannel(channel);
+      }
+    });
+
     let mounted = true;
+    let processingEvent = false; // Prevent concurrent processing
 
     const initializeAuth = async () => {
       console.log("🔍 [Auth] Starting initial session check...");
+      processingEvent = true;
+
       try {
         const {
           data: { session },
@@ -119,6 +144,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             await fetchProfile(session.user.id);
           } catch (error) {
             console.error("❌ [Auth] Profile fetch failed in init:", error);
+            setProfile(null);
           }
         } else {
           console.log("ℹ️ [Auth] No user found");
@@ -134,6 +160,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           );
           setInitialized(true);
           setLoading(false);
+          processingEvent = false;
         }
       }
     };
@@ -148,73 +175,85 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return;
       }
 
+      // ✅ Prevent concurrent processing
+      if (processingEvent) {
+        console.log("⚠️ [Auth Event] Already processing, skipping:", event);
+        return;
+      }
+
+      processingEvent = true;
+
       console.log(`🔔 [Auth Event] Event: ${event}`);
       console.log(`   Session exists: ${!!session}`);
       console.log(`   User ID: ${session?.user?.id || "none"}`);
 
-      if (event === "INITIAL_SESSION" && initialized) {
-        console.log(
-          "⏭️ [Auth Event] Skipping INITIAL_SESSION (already initialized)",
-        );
-        return;
-      }
+      try {
+        if (event === "INITIAL_SESSION" && initialized) {
+          console.log(
+            "⏭️ [Auth Event] Skipping INITIAL_SESSION (already initialized)",
+          );
+          return;
+        }
 
-      switch (event) {
-        case "INITIAL_SESSION":
-          console.log("🔵 [Auth Event] Handling INITIAL_SESSION");
-        case "SIGNED_IN":
-          if (event === "SIGNED_IN")
-            console.log("🟢 [Auth Event] Handling SIGNED_IN");
-        case "TOKEN_REFRESHED":
-          if (event === "TOKEN_REFRESHED")
-            console.log("🔄 [Auth Event] Handling TOKEN_REFRESHED");
-        case "USER_UPDATED":
-          if (event === "USER_UPDATED")
-            console.log("📝 [Auth Event] Handling USER_UPDATED");
+        switch (event) {
+          case "INITIAL_SESSION":
+            console.log("🔵 [Auth Event] Handling INITIAL_SESSION");
+          case "SIGNED_IN":
+            if (event === "SIGNED_IN")
+              console.log("🟢 [Auth Event] Handling SIGNED_IN");
+          case "TOKEN_REFRESHED":
+            if (event === "TOKEN_REFRESHED")
+              console.log("🔄 [Auth Event] Handling TOKEN_REFRESHED");
+          case "USER_UPDATED":
+            if (event === "USER_UPDATED")
+              console.log("📝 [Auth Event] Handling USER_UPDATED");
 
-          if (session?.user) {
-            console.log("✅ [Auth Event] Setting user state");
-            setUser(session.user);
+            if (session?.user) {
+              console.log("✅ [Auth Event] Setting user state");
+              setUser(session.user);
 
-            try {
-              await fetchProfile(session.user.id);
-              console.log("✅ [Auth Event] Profile fetch completed");
-            } catch (error) {
-              console.error("❌ [Auth Event] Profile fetch failed:", error);
+              try {
+                await fetchProfile(session.user.id);
+                console.log("✅ [Auth Event] Profile fetch completed");
+              } catch (error) {
+                console.error("❌ [Auth Event] Profile fetch failed:", error);
+                setProfile(null);
+              }
+            } else {
+              console.log("ℹ️ [Auth Event] No user in session");
+              setUser(null);
               setProfile(null);
             }
-          } else {
-            console.log("ℹ️ [Auth Event] No user in session");
+
+            console.log(
+              "✅ [Auth Event] Setting loading false & initialized true",
+            );
+            setLoading(false);
+            setInitialized(true);
+
+            console.log("🔄 [Auth Event] Calling router.refresh()");
+            router.refresh();
+            break;
+
+          case "SIGNED_OUT":
+            console.log("🔴 [Auth Event] Handling SIGNED_OUT");
             setUser(null);
             setProfile(null);
-          }
+            setLoading(false);
+            console.log("🔄 [Auth Event] Calling router.refresh()");
+            router.refresh();
+            break;
 
-          console.log(
-            "✅ [Auth Event] Setting loading false & initialized true",
-          );
-          setLoading(false);
-          setInitialized(true);
+          case "PASSWORD_RECOVERY":
+            console.log("🔑 [Auth Event] Handling PASSWORD_RECOVERY");
+            setLoading(false);
+            break;
 
-          console.log("🔄 [Auth Event] Calling router.refresh()");
-          router.refresh();
-          break;
-
-        case "SIGNED_OUT":
-          console.log("🔴 [Auth Event] Handling SIGNED_OUT");
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          console.log("🔄 [Auth Event] Calling router.refresh()");
-          router.refresh();
-          break;
-
-        case "PASSWORD_RECOVERY":
-          console.log("🔑 [Auth Event] Handling PASSWORD_RECOVERY");
-          setLoading(false);
-          break;
-
-        default:
-          console.warn(`⚠️ [Auth Event] Unhandled event: ${event}`);
+          default:
+            console.warn(`⚠️ [Auth Event] Unhandled event: ${event}`);
+        }
+      } finally {
+        processingEvent = false;
       }
     });
 
