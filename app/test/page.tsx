@@ -17,7 +17,10 @@ export default function TestPage() {
   const [category, setCategory] = useState("coffee");
 
   const addLog = (message: string) => {
-    setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} - ${message}`]);
+    setLogs((prev) => [
+      ...prev,
+      `${new Date().toLocaleTimeString()} - ${message}`,
+    ]);
     toast.success(message);
   };
 
@@ -26,15 +29,17 @@ export default function TestPage() {
     setCurriculum(val);
   }, []);
 
-  const handleCategoryChange = useCallback((val: string) => {
-    setCategory(val);
+  const handleCategoryChange = useCallback((id: string, _name: string) => {
+    setCategory(id);
   }, []);
 
   return (
     <div className="min-h-screen bg-stone-100 p-8">
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
-        <h1 className="text-2xl font-bold text-stone-900">Test Dropdown Comparison</h1>
+        <h1 className="text-2xl font-bold text-stone-900">
+          Test Dropdown Comparison
+        </h1>
 
         {/* Curriculum Dropdown (dengan FloatingPortal) */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
@@ -67,6 +72,11 @@ export default function TestPage() {
           <div className="max-w-xs">
             <CategoryDropdown
               value={category}
+              options={[
+                { id: "coffee", name: "Coffee" },
+                { id: "non-coffee", name: "Non Coffee" },
+                { id: "food", name: "Food" },
+              ]}
               onChange={handleCategoryChange}
             />
           </div>
@@ -81,19 +91,21 @@ export default function TestPage() {
             3. AcademicYearActionsDropdown
           </h2>
           <div className="flex flex-wrap gap-2 mb-4">
-            {(["draft", "active", "completed", "archived"] as Status[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                className={`px-4 py-2 rounded-lg font-medium capitalize ${
-                  status === s
-                    ? "bg-stone-900 text-white"
-                    : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+            {(["draft", "active", "completed", "archived"] as Status[]).map(
+              (s) => (
+                <button
+                  key={s}
+                  onClick={() => setStatus(s)}
+                  className={`px-4 py-2 rounded-lg font-medium capitalize ${
+                    status === s
+                      ? "bg-stone-900 text-white"
+                      : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                  }`}
+                >
+                  {s}
+                </button>
+              ),
+            )}
           </div>
 
           <div
