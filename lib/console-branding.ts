@@ -30,22 +30,6 @@ export const initConsoleBranding = () => {
     "font-size: 20px; font-weight: bold; color: #10b981;"
   );
 
-  console.log(
-    "%cWelcome to Alinco Education Platform 🚀",
-    "font-size: 14px; color: #6b7280;"
-  );
-
-  // Self-XSS Warning
-  console.log(
-    "%c⚠️ WARNING: Self-XSS Attack",
-    "font-size: 24px; color: #ef4444; font-weight: bold; background: #fee2e2; padding: 10px; border: 3px solid #dc2626;"
-  );
-
-  console.log(
-    "%cDo NOT paste any code here unless you know what you're doing!\n" +
-    "Scammers may trick you into pasting code that can steal your account.",
-    "font-size: 14px; color: #dc2626; font-weight: bold;"
-  );
 
   console.log("\n");
 
