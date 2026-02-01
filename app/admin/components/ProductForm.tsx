@@ -219,8 +219,11 @@ export const ProductForm = ({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-white/10 rounded-2xl cursor-pointer bg-stone-900/30 hover:bg-stone-900/50 hover:border-amber-500/30 transition-all group">
-                  <div className="flex flex-col items-center justify-center">
+                <label
+                  htmlFor="product-image"
+                  className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-white/10 rounded-2xl cursor-pointer bg-stone-900/30 hover:bg-stone-900/50 hover:border-amber-500/30 transition-all group"
+                >
+                  <div className="flex flex-col items-center justify-center pointer-events-none">
                     <div className="w-10 h-10 bg-stone-800 rounded-full flex items-center justify-center mb-2 group-hover:bg-amber-500/10 group-hover:text-amber-500 transition-colors text-stone-600">
                       <UploadCloud
                         className="w-5 h-5 transition-transform group-hover:-translate-y-1"
@@ -231,9 +234,6 @@ export const ProductForm = ({
                       Upload Gambar
                     </p>
                   </div>
-                  <label htmlFor="product-image" className="sr-only">
-                    Upload Gambar
-                  </label>
                   <input
                     id="product-image"
                     type="file"
@@ -241,7 +241,7 @@ export const ProductForm = ({
                     accept="image/*"
                     onChange={handleFileInput}
                   />
-                </div>
+                </label>
               )}
             </div>
 
