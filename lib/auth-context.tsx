@@ -43,7 +43,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
-  // 🔍 DEBUG: Log state changes
   useEffect(() => {
     console.log("🔄 [Auth State Changed]");
     console.log("  - user:", user?.id || "null");
@@ -61,22 +60,33 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         .eq("id", uid)
         .single();
 
+      console.log("📊 [Fetch Profile] Result:", {
+        hasData: !!data,
+        errorCode: error?.code,
+        errorMessage: error?.message,
+      });
+
       if (error) {
         if (error.code === "PGRST116") {
-          console.log("⚠️ [Profile] No profile found for user");
+          console.log(
+            "⚠️ [Profile] No profile found (this is OK for new users)",
+          );
         } else {
           console.error("❌ [Profile] Error:", error);
         }
         setProfile(null);
         return;
       }
-      console.log("✅ [Profile] Fetched successfully:", data.id);
+
+      console.log("✅ [Profile] Fetched successfully:", data?.id);
       setProfile(data);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
       console.error("❌ [Profile] Catch error:", errorMessage, error);
       setProfile(null);
+    } finally {
+      console.log("🏁 [Profile] Fetch complete");
     }
   }, []);
 
@@ -104,7 +114,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         if (session?.user) {
           console.log("✅ [Auth] User found, setting state...");
           setUser(session.user);
-          await fetchProfile(session.user.id);
+
+          try {
+            await fetchProfile(session.user.id);
+          } catch (error) {
+            console.error("❌ [Auth] Profile fetch failed in init:", error);
+          }
         } else {
           console.log("ℹ️ [Auth] No user found");
           setUser(null);
@@ -160,14 +175,26 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           if (session?.user) {
             console.log("✅ [Auth Event] Setting user state");
             setUser(session.user);
-            await fetchProfile(session.user.id);
+
+            try {
+              await fetchProfile(session.user.id);
+              console.log("✅ [Auth Event] Profile fetch completed");
+            } catch (error) {
+              console.error("❌ [Auth Event] Profile fetch failed:", error);
+              setProfile(null);
+            }
           } else {
             console.log("ℹ️ [Auth Event] No user in session");
             setUser(null);
             setProfile(null);
           }
+
+          console.log(
+            "✅ [Auth Event] Setting loading false & initialized true",
+          );
           setLoading(false);
           setInitialized(true);
+
           console.log("🔄 [Auth Event] Calling router.refresh()");
           router.refresh();
           break;
