@@ -69,7 +69,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   useEffect(() => {
     let mounted = true;
 
-    // Single source of truth for auth state
+    // ✅ Single source of truth untuk auth state
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -98,11 +98,14 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           setLoading(false);
           break;
 
+        case "PASSWORD_RECOVERY":
+          // User mengakses link reset password
+          setLoading(false);
+          break;
+
         default:
-          // Untuk event lain, pastikan loading tetap berhenti jika memang inisialisasi awal
-          if (event !== "MFA_CHALLENGE") {
-            setLoading(false);
-          }
+          // Log event yang tidak di-handle untuk monitoring
+          console.warn(`[Auth] Unhandled event: ${event}`);
       }
     });
 
@@ -115,21 +118,18 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const handleAuthError = (error: any): Error => {
     const errorMsg = error?.message || String(error);
 
-    // Gateway Timeout
     if (errorMsg.includes("504") || errorMsg.includes("Gateway Timeout")) {
       return new Error(
         "Server sedang sibuk. Silakan coba lagi dalam beberapa saat.",
       );
     }
 
-    // Connection Timeout
     if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
       return new Error(
         "Koneksi terputus. Periksa internet Anda dan coba lagi.",
       );
     }
 
-    // Network Error
     if (
       errorMsg.includes("NetworkError") ||
       errorMsg.includes("Failed to fetch")
@@ -139,12 +139,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       );
     }
 
-    // Service Unavailable
     if (errorMsg.includes("503") || errorMsg.includes("Service Unavailable")) {
       return new Error("Layanan sedang maintenance. Coba beberapa saat lagi.");
     }
 
-    // Bad Gateway
     if (errorMsg.includes("502") || errorMsg.includes("Bad Gateway")) {
       return new Error("Terjadi masalah pada server. Coba lagi nanti.");
     }
@@ -154,19 +152,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw handleAuthError(error);
 
-      // ✅ State akan di-update otomatis oleh onAuthStateChange
-      // Tidak perlu manual setUser di sini
+      // ✅ onAuthStateChange akan handle state update
     } catch (error) {
-      throw handleAuthError(error);
-    } finally {
+      // ✅ Set loading false hanya jika ada error
       setLoading(false);
+      throw handleAuthError(error);
     }
   }, []);
 
@@ -223,7 +219,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signOut = useCallback(async () => {
     try {
       await supabase.auth.signOut();
-      // ✅ State akan di-update otomatis oleh onAuthStateChange event SIGNED_OUT
+      // ✅ onAuthStateChange akan handle state update via SIGNED_OUT event
     } catch (error) {
       console.error("Sign out error:", error);
     }
