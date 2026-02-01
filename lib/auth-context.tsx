@@ -44,8 +44,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [initialized, setInitialized] = useState(false);
 
   const fetchProfile = useCallback(async (uid: string) => {
-    console.log("📥 [Fetching Profile] uid:", uid);
-
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Profile fetch timeout")), 5000),
     );
@@ -62,43 +60,27 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         timeoutPromise,
       ])) as any;
 
-      console.log("📊 [Fetch Profile] Result:", {
-        hasData: !!data,
-        errorCode: error?.code,
-        errorMessage: error?.message,
-      });
-
       if (error) {
         if (error.code === "PGRST116") {
-          console.log("⚠️ [Profile] No profile found (OK for new users)");
         } else {
-          console.error("❌ [Profile] Error:", error);
         }
         setProfile(null);
         return;
       }
 
-      console.log("✅ [Profile] Fetched successfully:", data?.id);
       setProfile(data);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      console.error("❌ [Profile] Catch error:", errorMessage, error);
       setProfile(null);
     } finally {
-      console.log("🏁 [Profile] Fetch complete");
     }
   }, []);
 
   useEffect(() => {
-    console.log("🚀 [Auth Context] useEffect started");
-
-    // Cleanup listener lama
-    console.log("🧹 [Auth] Removing old auth listeners...");
     const channels = supabase.getChannels();
     channels.forEach((channel) => {
       if (channel.topic.includes("auth")) {
-        console.log("🗑️ Removing old channel:", channel.topic);
         supabase.removeChannel(channel);
       }
     });
@@ -107,7 +89,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     let processingEvent = false;
 
     const initializeAuth = async () => {
-      console.log("🔍 [Auth] Starting initial session check...");
       processingEvent = true;
 
       try {
@@ -116,35 +97,24 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         } = await supabase.auth.getSession();
 
         if (!mounted) {
-          console.log("⚠️ [Auth] Component unmounted, skipping");
           return;
         }
 
-        console.log("📊 [Auth] Session check result:", {
-          hasSession: !!session,
-          userId: session?.user?.id || "none",
-        });
-
         if (session?.user) {
-          console.log("✅ [Auth] User found, setting state...");
           setUser(session.user);
 
           try {
             await fetchProfile(session.user.id);
           } catch (error) {
-            console.error("❌ [Auth] Profile fetch failed in init:", error);
             setProfile(null);
           }
         } else {
-          console.log("ℹ️ [Auth] No user found");
           setUser(null);
           setProfile(null);
         }
       } catch (error) {
-        console.error("❌ [Auth] Error getting session:", error);
       } finally {
         if (mounted) {
-          console.log("✅ [Auth] Initial check complete");
           setInitialized(true);
           setLoading(false);
           processingEvent = false;
@@ -158,26 +128,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) {
-        console.log("⚠️ [Auth Event] Component unmounted, skipping");
         return;
       }
 
       if (processingEvent) {
-        console.log("⚠️ [Auth Event] Already processing, skipping:", event);
         return;
       }
 
       processingEvent = true;
 
-      console.log(`🔔 [Auth Event] Event: ${event}`);
-      console.log(`   Session exists: ${!!session}`);
-      console.log(`   User ID: ${session?.user?.id || "none"}`);
-
       try {
         if (event === "INITIAL_SESSION" && initialized) {
-          console.log(
-            "⏭️ [Auth Event] Skipping INITIAL_SESSION (already initialized)",
-          );
           return;
         }
 
@@ -187,32 +148,23 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           case "TOKEN_REFRESHED":
           case "USER_UPDATED":
             if (session?.user) {
-              console.log("✅ [Auth Event] Setting user state");
               setUser(session.user);
 
               try {
                 await fetchProfile(session.user.id);
-                console.log("✅ [Auth Event] Profile fetch completed");
               } catch (error) {
-                console.error("❌ [Auth Event] Profile fetch failed:", error);
                 setProfile(null);
               }
             } else {
-              console.log("ℹ️ [Auth Event] No user in session");
               setUser(null);
               setProfile(null);
             }
 
-            console.log(
-              "✅ [Auth Event] Setting loading false & initialized true",
-            );
             setLoading(false);
             setInitialized(true);
-            // ❌ REMOVED: router.refresh() - tidak perlu, menyebabkan re-render loop
             break;
 
           case "SIGNED_OUT":
-            console.log("🔴 [Auth Event] Handling SIGNED_OUT");
             setUser(null);
             setProfile(null);
             setLoading(false);
@@ -220,22 +172,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             break;
 
           case "PASSWORD_RECOVERY":
-            console.log("🔑 [Auth Event] Handling PASSWORD_RECOVERY");
             setLoading(false);
             break;
 
           default:
-            console.warn(`⚠️ [Auth Event] Unhandled event: ${event}`);
         }
       } finally {
         processingEvent = false;
       }
     });
 
-    console.log("👂 [Auth] Listener attached");
-
     return () => {
-      console.log("🧹 [Auth] Cleanup: unmounting");
       mounted = false;
       subscription.unsubscribe();
     };
@@ -342,9 +289,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signOut = useCallback(async () => {
     try {
       await supabase.auth.signOut();
-    } catch (error) {
-      console.error("❌ [Sign Out] Error:", error);
-    }
+    } catch (error) {}
   }, []);
 
   const refreshProfile = useCallback(async () => {
