@@ -63,7 +63,7 @@ export default function ProductsPage() {
       if (data) setOptionGroups(data);
     };
     fetchGroups();
-  });
+  }, []); // ✅ Ditambahkan agar tidak infinite loop
 
   // Handlers
   const handleEdit = async (product: Product) => {
