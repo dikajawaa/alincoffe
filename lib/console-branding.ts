@@ -27,7 +27,7 @@ export const initConsoleBranding = () => {
   console.log("\n");
 
   console.log(
-    "%c© 2026 Natlin | www.alinco.my.id",
+    "% www.alinco.my.id",
     "color: #9ca3af; font-size: 11px;"
   );
 };
