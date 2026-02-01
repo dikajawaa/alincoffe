@@ -43,19 +43,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
-  // Debug state changes
-  useEffect(() => {
-    console.log("🔄 [Auth State Changed]");
-    console.log("  - user:", user?.id || "null");
-    console.log("  - profile:", profile?.id || "null");
-    console.log("  - loading:", loading);
-    console.log("  - initialized:", initialized);
-  }, [user, profile, loading, initialized]);
-
   const fetchProfile = useCallback(async (uid: string) => {
     console.log("📥 [Fetching Profile] uid:", uid);
 
-    // Timeout wrapper untuk prevent hang
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Profile fetch timeout")), 5000),
     );
@@ -67,7 +57,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         .eq("id", uid)
         .single();
 
-      // Race antara fetch dan timeout
       const { data, error } = (await Promise.race([
         fetchPromise,
         timeoutPromise,
@@ -104,7 +93,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   useEffect(() => {
     console.log("🚀 [Auth Context] useEffect started");
 
-    // ✅ Cleanup listener lama yang mungkin masih aktif
+    // Cleanup listener lama
     console.log("🧹 [Auth] Removing old auth listeners...");
     const channels = supabase.getChannels();
     channels.forEach((channel) => {
@@ -115,7 +104,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     });
 
     let mounted = true;
-    let processingEvent = false; // Prevent concurrent processing
+    let processingEvent = false;
 
     const initializeAuth = async () => {
       console.log("🔍 [Auth] Starting initial session check...");
@@ -155,9 +144,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         console.error("❌ [Auth] Error getting session:", error);
       } finally {
         if (mounted) {
-          console.log(
-            "✅ [Auth] Initial check complete, setting initialized & loading false",
-          );
+          console.log("✅ [Auth] Initial check complete");
           setInitialized(true);
           setLoading(false);
           processingEvent = false;
@@ -175,7 +162,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return;
       }
 
-      // ✅ Prevent concurrent processing
       if (processingEvent) {
         console.log("⚠️ [Auth Event] Already processing, skipping:", event);
         return;
@@ -197,17 +183,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
         switch (event) {
           case "INITIAL_SESSION":
-            console.log("🔵 [Auth Event] Handling INITIAL_SESSION");
           case "SIGNED_IN":
-            if (event === "SIGNED_IN")
-              console.log("🟢 [Auth Event] Handling SIGNED_IN");
           case "TOKEN_REFRESHED":
-            if (event === "TOKEN_REFRESHED")
-              console.log("🔄 [Auth Event] Handling TOKEN_REFRESHED");
           case "USER_UPDATED":
-            if (event === "USER_UPDATED")
-              console.log("📝 [Auth Event] Handling USER_UPDATED");
-
             if (session?.user) {
               console.log("✅ [Auth Event] Setting user state");
               setUser(session.user);
@@ -230,9 +208,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             );
             setLoading(false);
             setInitialized(true);
-
-            console.log("🔄 [Auth Event] Calling router.refresh()");
-            router.refresh();
+            // ❌ REMOVED: router.refresh() - tidak perlu, menyebabkan re-render loop
             break;
 
           case "SIGNED_OUT":
@@ -240,8 +216,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             setUser(null);
             setProfile(null);
             setLoading(false);
-            console.log("🔄 [Auth Event] Calling router.refresh()");
-            router.refresh();
+            router.push("/login"); // Redirect ke login saat logout
             break;
 
           case "PASSWORD_RECOVERY":
@@ -303,15 +278,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
-      console.log("🔐 [Sign In] Attempting sign in...");
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw handleAuthError(error);
-      console.log("✅ [Sign In] Success");
     } catch (error) {
-      console.error("❌ [Sign In] Error:", error);
       setLoading(false);
       throw handleAuthError(error);
     }
@@ -320,7 +292,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signInWithProvider = useCallback(
     async (provider: "google" | "apple") => {
       try {
-        console.log(`🔐 [Sign In] Attempting OAuth with ${provider}...`);
         const { error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
@@ -332,9 +303,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           },
         });
         if (error) throw handleAuthError(error);
-        console.log("✅ [Sign In] OAuth redirect initiated");
       } catch (error) {
-        console.error("❌ [Sign In] OAuth error:", error);
         throw handleAuthError(error);
       }
     },
@@ -344,7 +313,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signUp = useCallback(
     async (email: string, password: string, fullName: string) => {
       try {
-        console.log("📝 [Sign Up] Attempting sign up...");
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -353,9 +321,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           },
         });
         if (error) throw handleAuthError(error);
-        console.log("✅ [Sign Up] Success");
       } catch (error) {
-        console.error("❌ [Sign Up] Error:", error);
         throw handleAuthError(error);
       }
     },
@@ -364,30 +330,24 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const sendPasswordReset = useCallback(async (email: string) => {
     try {
-      console.log("🔑 [Password Reset] Sending reset email...");
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${globalThis.location.origin}/login/reset-password`,
       });
       if (error) throw handleAuthError(error);
-      console.log("✅ [Password Reset] Email sent");
     } catch (error) {
-      console.error("❌ [Password Reset] Error:", error);
       throw handleAuthError(error);
     }
   }, []);
 
   const signOut = useCallback(async () => {
     try {
-      console.log("🚪 [Sign Out] Attempting sign out...");
       await supabase.auth.signOut();
-      console.log("✅ [Sign Out] Success");
     } catch (error) {
       console.error("❌ [Sign Out] Error:", error);
     }
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    console.log("🔄 [Refresh Profile] Triggered");
     if (user) await fetchProfile(user.id);
   }, [user, fetchProfile]);
 
