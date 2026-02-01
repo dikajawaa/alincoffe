@@ -156,17 +156,28 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     return error;
   };
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw handleAuthError(error);
-    } catch (error) {
-      throw handleAuthError(error);
-    }
-  }, []);
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw handleAuthError(error);
+
+        if (data.session?.user) {
+          setUser(data.session.user);
+          await fetchProfile(data.session.user.id);
+        }
+      } catch (error) {
+        throw handleAuthError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchProfile],
+  );
 
   const signInWithProvider = useCallback(
     async (provider: "google" | "apple") => {
