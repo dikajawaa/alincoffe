@@ -71,6 +71,14 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
     // 1. Initial Session Check (Critical for first load)
     const initSession = async () => {
+      // Safety timeout: Jangan biarkan loading lebih dari 5 detik
+      const safetyTimeout = setTimeout(() => {
+        if (mounted) {
+          console.warn("Auth initialization timed out, forcing loading false");
+          setLoading(false);
+        }
+      }, 5000);
+
       try {
         const {
           data: { session },
@@ -82,6 +90,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       } catch (error) {
         console.error("Session check error:", error);
       } finally {
+        clearTimeout(safetyTimeout);
         if (mounted) setLoading(false);
       }
     };

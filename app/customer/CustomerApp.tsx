@@ -524,8 +524,8 @@ export default function CustomerApp() {
     (p) => activeCategory === "all" || p.category === activeCategory,
   );
 
-  // Auth loading
-  if (authLoading || (!user && !authLoading)) {
+  // Final loading guard
+  if (authLoading) {
     return <PageLoading isOpen={true} message="Memproses autentikasi..." />;
   }
 
