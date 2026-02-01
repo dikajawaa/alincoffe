@@ -11,6 +11,7 @@ import {
 } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { useRouter } from "next/navigation";
 
 interface Profile {
   id: string;
@@ -36,11 +37,23 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+
+  // 🔍 DEBUG: Log state changes
+  useEffect(() => {
+    console.log("🔄 [Auth State Changed]");
+    console.log("  - user:", user?.id || "null");
+    console.log("  - profile:", profile?.id || "null");
+    console.log("  - loading:", loading);
+    console.log("  - initialized:", initialized);
+  }, [user, profile, loading, initialized]);
 
   const fetchProfile = useCallback(async (uid: string) => {
+    console.log("📥 [Fetching Profile] uid:", uid);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -50,70 +63,142 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
       if (error) {
         if (error.code === "PGRST116") {
-          console.log("No profile found for user, will create on first edit");
+          console.log("⚠️ [Profile] No profile found for user");
         } else {
-          console.error("Error fetching profile:", error);
+          console.error("❌ [Profile] Error:", error);
         }
         setProfile(null);
         return;
       }
+      console.log("✅ [Profile] Fetched successfully:", data.id);
       setProfile(data);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      console.error("Error fetching profile:", errorMessage, error);
+      console.error("❌ [Profile] Catch error:", errorMessage, error);
       setProfile(null);
     }
   }, []);
 
   useEffect(() => {
+    console.log("🚀 [Auth Context] useEffect started");
     let mounted = true;
 
-    // ✅ Single source of truth untuk auth state
+    const initializeAuth = async () => {
+      console.log("🔍 [Auth] Starting initial session check...");
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!mounted) {
+          console.log("⚠️ [Auth] Component unmounted, skipping");
+          return;
+        }
+
+        console.log("📊 [Auth] Session check result:", {
+          hasSession: !!session,
+          userId: session?.user?.id || "none",
+        });
+
+        if (session?.user) {
+          console.log("✅ [Auth] User found, setting state...");
+          setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          console.log("ℹ️ [Auth] No user found");
+          setUser(null);
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error("❌ [Auth] Error getting session:", error);
+      } finally {
+        if (mounted) {
+          console.log(
+            "✅ [Auth] Initial check complete, setting initialized & loading false",
+          );
+          setInitialized(true);
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+      if (!mounted) {
+        console.log("⚠️ [Auth Event] Component unmounted, skipping");
+        return;
+      }
 
-      console.log(`[Auth] Event: ${event}`);
+      console.log(`🔔 [Auth Event] Event: ${event}`);
+      console.log(`   Session exists: ${!!session}`);
+      console.log(`   User ID: ${session?.user?.id || "none"}`);
+
+      if (event === "INITIAL_SESSION" && initialized) {
+        console.log(
+          "⏭️ [Auth Event] Skipping INITIAL_SESSION (already initialized)",
+        );
+        return;
+      }
 
       switch (event) {
         case "INITIAL_SESSION":
+          console.log("🔵 [Auth Event] Handling INITIAL_SESSION");
         case "SIGNED_IN":
+          if (event === "SIGNED_IN")
+            console.log("🟢 [Auth Event] Handling SIGNED_IN");
         case "TOKEN_REFRESHED":
+          if (event === "TOKEN_REFRESHED")
+            console.log("🔄 [Auth Event] Handling TOKEN_REFRESHED");
         case "USER_UPDATED":
+          if (event === "USER_UPDATED")
+            console.log("📝 [Auth Event] Handling USER_UPDATED");
+
           if (session?.user) {
+            console.log("✅ [Auth Event] Setting user state");
             setUser(session.user);
             await fetchProfile(session.user.id);
           } else {
+            console.log("ℹ️ [Auth Event] No user in session");
             setUser(null);
             setProfile(null);
           }
           setLoading(false);
+          setInitialized(true);
+          console.log("🔄 [Auth Event] Calling router.refresh()");
+          router.refresh();
           break;
 
         case "SIGNED_OUT":
+          console.log("🔴 [Auth Event] Handling SIGNED_OUT");
           setUser(null);
           setProfile(null);
           setLoading(false);
+          console.log("🔄 [Auth Event] Calling router.refresh()");
+          router.refresh();
           break;
 
         case "PASSWORD_RECOVERY":
-          // User mengakses link reset password
+          console.log("🔑 [Auth Event] Handling PASSWORD_RECOVERY");
           setLoading(false);
           break;
 
         default:
-          // Log event yang tidak di-handle untuk monitoring
-          console.warn(`[Auth] Unhandled event: ${event}`);
+          console.warn(`⚠️ [Auth Event] Unhandled event: ${event}`);
       }
     });
 
+    console.log("👂 [Auth] Listener attached");
+
     return () => {
+      console.log("🧹 [Auth] Cleanup: unmounting");
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, router, initialized]);
 
   const handleAuthError = (error: any): Error => {
     const errorMsg = error?.message || String(error);
@@ -152,15 +237,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
+      console.log("🔐 [Sign In] Attempting sign in...");
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw handleAuthError(error);
-
-      // ✅ onAuthStateChange akan handle state update
+      console.log("✅ [Sign In] Success");
     } catch (error) {
-      // ✅ Set loading false hanya jika ada error
+      console.error("❌ [Sign In] Error:", error);
       setLoading(false);
       throw handleAuthError(error);
     }
@@ -169,6 +254,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signInWithProvider = useCallback(
     async (provider: "google" | "apple") => {
       try {
+        console.log(`🔐 [Sign In] Attempting OAuth with ${provider}...`);
         const { error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
@@ -180,7 +266,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           },
         });
         if (error) throw handleAuthError(error);
+        console.log("✅ [Sign In] OAuth redirect initiated");
       } catch (error) {
+        console.error("❌ [Sign In] OAuth error:", error);
         throw handleAuthError(error);
       }
     },
@@ -190,6 +278,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signUp = useCallback(
     async (email: string, password: string, fullName: string) => {
       try {
+        console.log("📝 [Sign Up] Attempting sign up...");
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -198,7 +287,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           },
         });
         if (error) throw handleAuthError(error);
+        console.log("✅ [Sign Up] Success");
       } catch (error) {
+        console.error("❌ [Sign Up] Error:", error);
         throw handleAuthError(error);
       }
     },
@@ -207,25 +298,30 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const sendPasswordReset = useCallback(async (email: string) => {
     try {
+      console.log("🔑 [Password Reset] Sending reset email...");
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${globalThis.location.origin}/login/reset-password`,
       });
       if (error) throw handleAuthError(error);
+      console.log("✅ [Password Reset] Email sent");
     } catch (error) {
+      console.error("❌ [Password Reset] Error:", error);
       throw handleAuthError(error);
     }
   }, []);
 
   const signOut = useCallback(async () => {
     try {
+      console.log("🚪 [Sign Out] Attempting sign out...");
       await supabase.auth.signOut();
-      // ✅ onAuthStateChange akan handle state update via SIGNED_OUT event
+      console.log("✅ [Sign Out] Success");
     } catch (error) {
-      console.error("Sign out error:", error);
+      console.error("❌ [Sign Out] Error:", error);
     }
   }, []);
 
   const refreshProfile = useCallback(async () => {
+    console.log("🔄 [Refresh Profile] Triggered");
     if (user) await fetchProfile(user.id);
   }, [user, fetchProfile]);
 
